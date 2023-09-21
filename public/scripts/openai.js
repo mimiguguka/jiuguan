@@ -123,6 +123,34 @@ const j2_max_pres = 5.0;
 const openrouter_website_model = 'OR_Website';
 const openai_max_stop_strings = 4;
 
+const textCompletionModels = [
+    "gpt-3.5-turbo-instruct",
+    "gpt-3.5-turbo-instruct-0914",
+    "text-davinci-003",
+    "text-davinci-002",
+    "text-davinci-001",
+    "text-curie-001",
+    "text-babbage-001",
+    "text-ada-001",
+    "code-davinci-002",
+    "code-davinci-001",
+    "code-cushman-002",
+    "code-cushman-001",
+    "text-davinci-edit-001",
+    "code-davinci-edit-001",
+    "text-embedding-ada-002",
+    "text-similarity-davinci-001",
+    "text-similarity-curie-001",
+    "text-similarity-babbage-001",
+    "text-similarity-ada-001",
+    "text-search-davinci-doc-001",
+    "text-search-curie-doc-001",
+    "text-search-babbage-doc-001",
+    "text-search-ada-doc-001",
+    "code-search-babbage-code-001",
+    "code-search-ada-code-001",
+];
+
 let biasCache = undefined;
 let model_list = [];
 
@@ -630,6 +658,17 @@ function populateChatCompletion(prompts, chatCompletion, { bias, quietPrompt, ty
         if (true === afterScenario) chatCompletion.insert(authorsNote, 'scenario');
     }
 
+    // Vectors Memory
+    if (prompts.has('vectorsMemory')) {
+        const vectorsMemory = Message.fromPrompt(prompts.get('vectorsMemory'));
+        chatCompletion.insert(vectorsMemory, 'main');
+    }
+
+    // Smart Context (ChromaDB)
+    if (prompts.has('smartContext')) {
+        chatCompletion.insert(Message.fromPrompt(prompts.get('smartContext')), 'main');
+    }
+
     // Decide whether dialogue examples should always be added
     if (power_user.pin_examples) {
         populateDialogueExamples(prompts, chatCompletion);
@@ -695,6 +734,22 @@ function preparePromptsForChatCompletion({Scenario, charPersonality, name2, worl
         role: 'system',
         content: authorsNote.value,
         identifier: 'authorsNote'
+    });
+
+    // Vectors Memory
+    const vectorsMemory = extensionPrompts['3_vectors'];
+    if (vectorsMemory && vectorsMemory.value) systemPrompts.push({
+        role: 'system',
+        content: vectorsMemory.value,
+        identifier: 'vectorsMemory',
+    });
+
+    // Smart Context (ChromaDB)
+    const smartContext = extensionPrompts['chromadb'];
+    if (smartContext && smartContext.value) systemPrompts.push({
+        role: 'system',
+        content: smartContext.value,
+        identifier: 'smartContext'
     });
 
     // Persona Description
@@ -1096,7 +1151,7 @@ async function sendOpenAIRequest(type, openai_msgs_tosend, signal) {
     const isOpenRouter = oai_settings.chat_completion_source == chat_completion_sources.OPENROUTER;
     const isScale = oai_settings.chat_completion_source == chat_completion_sources.SCALE;
     const isAI21 = oai_settings.chat_completion_source == chat_completion_sources.AI21;
-    const isTextCompletion = oai_settings.chat_completion_source == chat_completion_sources.OPENAI && (oai_settings.openai_model.startsWith('text-') || oai_settings.openai_model.startsWith('code-'));
+    const isTextCompletion = oai_settings.chat_completion_source == chat_completion_sources.OPENAI && textCompletionModels.includes(oai_settings.openai_model);
     const isQuiet = type === 'quiet';
     const stream = oai_settings.stream_openai && !isQuiet && !isScale && !isAI21;
 
@@ -2100,7 +2155,7 @@ async function saveOpenAIPreset(name, settings, triggerUi = true) {
         use_alt_scale: settings.use_alt_scale,
     };
 
-    const savePresetSettings = await fetch(`/savepreset_openai?name=${name}`, {
+    const savePresetSettings = await fetch(`/api/presets/save-openai?name=${name}`, {
         method: 'POST',
         headers: getRequestHeaders(),
         body: JSON.stringify(presetBody),
@@ -2260,7 +2315,7 @@ async function onPresetImportFileChange(e) {
         }
     }
 
-    const savePresetSettings = await fetch(`/savepreset_openai?name=${name}`, {
+    const savePresetSettings = await fetch(`/api/presets/save-openai?name=${name}`, {
         method: 'POST',
         headers: getRequestHeaders(),
         body: importedFile,
@@ -2372,14 +2427,16 @@ async function onDeletePresetClick() {
         $('#settings_perset_openai').trigger('change');
     }
 
-    const response = await fetch('/deletepreset_openai', {
+    const response = await fetch('/api/presets/delete-openai', {
         method: 'POST',
         headers: getRequestHeaders(),
         body: JSON.stringify({ name: nameToDelete }),
     });
 
     if (!response.ok) {
-        console.warn('Preset was not deleted from server');
+        toastr.warning('Preset was not deleted from server');
+    } else {
+        toastr.success('Preset deleted');
     }
 
     saveSettingsDebounced();

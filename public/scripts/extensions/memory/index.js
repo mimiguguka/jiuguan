@@ -2,6 +2,7 @@ import { getStringHash, debounce, waitUntilCondition, extractAllWords } from "..
 import { getContext, getApiUrl, extension_settings, doExtrasFetch, modules } from "../../extensions.js";
 import { eventSource, event_types, extension_prompt_types, generateQuietPrompt, is_send_press, saveSettingsDebounced, substituteParams } from "../../../script.js";
 import { is_group_generating, selected_group } from "../../group-chats.js";
+import { registerSlashCommand } from "../../slash-commands.js";
 export { MODULE_NAME };
 
 const MODULE_NAME = '1_memory';
@@ -63,7 +64,7 @@ const defaultSettings = {
     source: summary_sources.extras,
     prompt: defaultPrompt,
     template: defaultTemplate,
-    position: extension_prompt_types.AFTER_SCENARIO,
+    position: extension_prompt_types.IN_PROMPT,
     depth: 2,
     promptWords: 200,
     promptMinWords: 25,
@@ -637,4 +638,5 @@ jQuery(function () {
     eventSource.on(event_types.MESSAGE_EDITED, onChatEvent);
     eventSource.on(event_types.MESSAGE_SWIPED, onChatEvent);
     eventSource.on(event_types.CHAT_CHANGED, onChatEvent);
+    registerSlashCommand('summarize', forceSummarizeChat, [], ' – forces the summarization of the current chat using the Main API', true, true);
 });
